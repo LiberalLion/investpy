@@ -67,19 +67,23 @@ def economic_calendar(time_zone=None, time_filter='time_only', countries=None, i
         raise ValueError("ERR#0107: the introduced time_zone must be a string unless it is None.")
 
     if time_zone is None:
-        time_zone = 'GMT'
-
         diff = datetime.strptime(strftime('%d/%m/%Y %H:%M', localtime()), '%d/%m/%Y %H:%M') - \
             datetime.strptime(strftime('%d/%m/%Y %H:%M', gmtime()), '%d/%m/%Y %H:%M')
 
         hour_diff = int(diff.total_seconds() / 3600)
         min_diff = int(diff.total_seconds() % 3600) * 60
 
-        if hour_diff != 0:
-            time_zone = "GMT " + ('+' if hour_diff > 0 else '') + str(hour_diff) + ":" + ('00' if min_diff < 30 else '30')
-    else:
-        if time_zone not in cst.TIMEZONES.keys():
-            raise ValueError("ERR#0108: the introduced time_zone does not exist, please consider passing time_zone as None.")
+        time_zone = (
+            "GMT "
+            + ('+' if hour_diff > 0 else '')
+            + str(hour_diff)
+            + ":"
+            + ('00' if min_diff < 30 else '30')
+            if hour_diff != 0
+            else 'GMT'
+        )
+    elif time_zone not in cst.TIMEZONES.keys():
+        raise ValueError("ERR#0108: the introduced time_zone does not exist, please consider passing time_zone as None.")
 
     if not isinstance(time_filter, str):
         raise ValueError("ERR#0109: the introduced time_filter is not valid since it must be a string.")
@@ -114,7 +118,7 @@ def economic_calendar(time_zone=None, time_filter='time_only', countries=None, i
 
     dates = [from_date, to_date]
 
-    if any(date is None for date in dates) is True:
+    if any(date is None for date in dates):
         data = {
             'timeZone': choice(cst.TIMEZONES[time_zone]),
             'timeFilter': cst.TIME_FILTERS[time_filter],
@@ -151,7 +155,7 @@ def economic_calendar(time_zone=None, time_filter='time_only', countries=None, i
         }
 
     if countries is not None:
-        def_countries = list()
+        def_countries = []
 
         available_countries = list(cst.COUNTRY_ID_FILTERS.keys())
 
@@ -163,13 +167,11 @@ def economic_calendar(time_zone=None, time_filter='time_only', countries=None, i
             if country in available_countries:
                 def_countries.append(cst.COUNTRY_ID_FILTERS[country])
 
-        if len(def_countries) > 0:
-            data.update({
-                'country[]': def_countries
-            })
+        if def_countries:
+            data['country[]'] = def_countries
 
     if categories is not None:
-        def_categories = list()
+        def_categories = []
 
         available_categories = list(cst.CATEGORY_FILTERS.keys())
 
@@ -181,13 +183,11 @@ def economic_calendar(time_zone=None, time_filter='time_only', countries=None, i
             if category in available_categories:
                 def_categories.append(cst.CATEGORY_FILTERS[category])
 
-        if len(def_categories) > 0:
-            data.update({
-                'category[]': def_categories
-            })
+        if def_categories:
+            data['category[]'] = def_categories
 
     if importances is not None:
-        def_importances = list()
+        def_importances = []
 
         # TODO: improve loop using lambda
         for importance in importances:
@@ -200,21 +200,19 @@ def economic_calendar(time_zone=None, time_filter='time_only', countries=None, i
                         def_importances.append(key)
                     break
 
-        if len(def_importances) > 0:            
-            data.update({
-                'importance[]': def_importances
-            })
+        if def_importances:    
+            data['importance[]'] = def_importances
 
     req = requests.post(url, headers=headers, data=data)
 
     root = fromstring(req.json()['data'])
     table = root.xpath(".//tr")
 
-    results = list()
+    results = []
 
     for row in table:
         id_ = row.get("id")
-        if id_ == None:
+        if id_ is None:
             curr_date = datetime.fromtimestamp(int(row.xpath("td")[0].get("id").replace("theDay", "")), tz=pytz.utc).strftime("%d/%m/%Y")
         else:
             id_ = id_.replace('eventRowId_', '')
@@ -229,7 +227,7 @@ def economic_calendar(time_zone=None, time_filter='time_only', countries=None, i
                         zone = value.xpath('span')[0].get('title').lower()
                         currency = value.text_content().strip()
                     elif value.get("class").__contains__('sentiment'):
-                        if value.get("data-img_key") == None:
+                        if value.get("data-img_key") is None:
                             importance_rating = None
                         else:
                             importance_rating = value.get('data-img_key').replace('bull', '')
@@ -248,13 +246,15 @@ def economic_calendar(time_zone=None, time_filter='time_only', countries=None, i
                 'time': time,
                 'zone': zone,
                 'currency': None if currency == '' else currency,
-                'importance': None if importance_rating == None else cst.IMPORTANCE_RATINGS[int(importance_rating)],
+                'importance': None
+                if importance_rating is None
+                else cst.IMPORTANCE_RATINGS[int(importance_rating)],
                 'event': event,
                 'actual': None if actual == '' else actual,
                 'forecast': None if forecast == '' else forecast,
-                'previous': None if previous == '' else previous
+                'previous': None if previous == '' else previous,
             }
 
             results.append(result)
-    
+
     return pd.DataFrame(results)

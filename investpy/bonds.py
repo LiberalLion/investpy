@@ -274,53 +274,48 @@ def get_bond_recent_data(bond, as_json=False, order='ascending', interval='Daily
     req = requests.post(url, headers=head, data=params)
 
     if req.status_code != 200:
-        raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+        raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
     root_ = fromstring(req.text)
     path_ = root_.xpath(".//table[@id='curr_table']/tbody/tr")
-    
-    result = list()
 
-    if path_:
-        for elements_ in path_:
-            if elements_.xpath(".//td")[0].text_content() == 'No results found':
-                raise IndexError("ERR#0069: bond information unavailable or not found.")
-            
-            info = []
+    result = []
 
-            for nested_ in elements_.xpath(".//td"):
-                info.append(nested_.get('data-real-value'))
-
-            bond_date = datetime.strptime(str(datetime.fromtimestamp(int(info[0]), tz=pytz.utc).date()), '%Y-%m-%d')
-
-            bond_close = float(info[1].replace(',', ''))
-            bond_open = float(info[2].replace(',', ''))
-            bond_high = float(info[3].replace(',', ''))
-            bond_low = float(info[4].replace(',', ''))
-
-            result.insert(len(result),
-                          Data(bond_date, bond_open, bond_high, bond_low, bond_close, None, None, None))
-
-        if order in ['ascending', 'asc']:
-            result = result[::-1]
-        elif order in ['descending', 'desc']:
-            result = result
-
-        if as_json is True:
-            json_ = {
-                'name': name,
-                'recent':
-                    [value.bond_as_json() for value in result]
-            }
-
-            return json.dumps(json_, sort_keys=False)
-        elif as_json is False:
-            df = pd.DataFrame.from_records([value.bond_to_dict() for value in result])
-            df.set_index('Date', inplace=True)
-
-            return df
-    else:
+    if not path_:
         raise RuntimeError("ERR#0004: data retrieval error while scraping.")
+    for elements_ in path_:
+        if elements_.xpath(".//td")[0].text_content() == 'No results found':
+            raise IndexError("ERR#0069: bond information unavailable or not found.")
+
+        info = [nested_.get('data-real-value') for nested_ in elements_.xpath(".//td")]
+        bond_date = datetime.strptime(str(datetime.fromtimestamp(int(info[0]), tz=pytz.utc).date()), '%Y-%m-%d')
+
+        bond_close = float(info[1].replace(',', ''))
+        bond_open = float(info[2].replace(',', ''))
+        bond_high = float(info[3].replace(',', ''))
+        bond_low = float(info[4].replace(',', ''))
+
+        result.insert(len(result),
+                      Data(bond_date, bond_open, bond_high, bond_low, bond_close, None, None, None))
+
+    if order in ['ascending', 'asc']:
+        result = result[::-1]
+    elif order in ['descending', 'desc']:
+        result = result
+
+    if as_json is True:
+        json_ = {
+            'name': name,
+            'recent':
+                [value.bond_as_json() for value in result]
+        }
+
+        return json.dumps(json_, sort_keys=False)
+    elif as_json is False:
+        df = pd.DataFrame.from_records([value.bond_to_dict() for value in result])
+        df.set_index('Date', inplace=True)
+
+        return df
 
 
 def get_bond_historical_data(bond, from_date, to_date, as_json=False, order='ascending', interval='Daily'):
@@ -433,7 +428,7 @@ def get_bond_historical_data(bond, from_date, to_date, as_json=False, order='asc
 
     flag = True
 
-    while flag is True:
+    while flag:
         diff = end_date.year - start_date.year
 
         if diff > 19:
@@ -480,9 +475,11 @@ def get_bond_historical_data(bond, from_date, to_date, as_json=False, order='asc
     name = bonds.loc[(bonds['name'].str.lower() == bond).idxmax(), 'name']
     full_name = bonds.loc[(bonds['name'].str.lower() == bond).idxmax(), 'full_name']
 
-    final = list()
+    final = []
 
     header = full_name + " Bond Yield Historical Data"
+
+    url = "https://www.investing.com/instruments/HistoricalDataAjax"
 
     for index in range(len(date_interval['intervals'])):
         interval_counter += 1
@@ -507,12 +504,10 @@ def get_bond_historical_data(bond, from_date, to_date, as_json=False, order='asc
             "Connection": "keep-alive",
         }
 
-        url = "https://www.investing.com/instruments/HistoricalDataAjax"
-
         req = requests.post(url, headers=head, data=params)
 
         if req.status_code != 200:
-            raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+            raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
         if not req.text:
             continue
@@ -520,56 +515,51 @@ def get_bond_historical_data(bond, from_date, to_date, as_json=False, order='asc
         root_ = fromstring(req.text)
         path_ = root_.xpath(".//table[@id='curr_table']/tbody/tr")
 
-        result = list()
+        result = []
 
-        if path_:
-            for elements_ in path_:
-                if elements_.xpath(".//td")[0].text_content() == 'No results found':
-                    if interval_counter < interval_limit:
-                        data_flag = False
-                    else:
-                        raise IndexError("ERR#0069: bond information unavailable or not found.")
-                else:
-                    data_flag = True
-                
-                if data_flag is True:
-                    info = []
-
-                    for nested_ in elements_.xpath(".//td"):
-                        info.append(nested_.get('data-real-value'))
-
-                    bond_date = datetime.strptime(str(datetime.fromtimestamp(int(info[0]), tz=pytz.utc).date()), '%Y-%m-%d')
-
-                    bond_close = float(info[1].replace(',', ''))
-                    bond_open = float(info[2].replace(',', ''))
-                    bond_high = float(info[3].replace(',', ''))
-                    bond_low = float(info[4].replace(',', ''))
-
-                    result.insert(len(result),
-                                  Data(bond_date, bond_open, bond_high, bond_low, bond_close, None, None, None))
-
-            if data_flag is True:
-                if order in ['ascending', 'asc']:
-                    result = result[::-1]
-                elif order in ['descending', 'desc']:
-                    result = result
-
-                if as_json is True:
-                    json_ = {
-                        'name': name,
-                        'historical':
-                            [value.bond_as_json() for value in result]
-                    }
-
-                    final.append(json_)
-                elif as_json is False:
-                    df = pd.DataFrame.from_records([value.bond_to_dict() for value in result])
-                    df.set_index('Date', inplace=True)
-
-                    final.append(df)
-        else:
+        if not path_:
             raise RuntimeError("ERR#0004: data retrieval error while scraping.")
 
+        for elements_ in path_:
+            if elements_.xpath(".//td")[0].text_content() == 'No results found':
+                if interval_counter < interval_limit:
+                    data_flag = False
+                else:
+                    raise IndexError("ERR#0069: bond information unavailable or not found.")
+            else:
+                data_flag = True
+
+            if data_flag is True:
+                info = [nested_.get('data-real-value') for nested_ in elements_.xpath(".//td")]
+                bond_date = datetime.strptime(str(datetime.fromtimestamp(int(info[0]), tz=pytz.utc).date()), '%Y-%m-%d')
+
+                bond_close = float(info[1].replace(',', ''))
+                bond_open = float(info[2].replace(',', ''))
+                bond_high = float(info[3].replace(',', ''))
+                bond_low = float(info[4].replace(',', ''))
+
+                result.insert(len(result),
+                              Data(bond_date, bond_open, bond_high, bond_low, bond_close, None, None, None))
+
+        if data_flag is True:
+            if order in ['ascending', 'asc']:
+                result = result[::-1]
+            elif order in ['descending', 'desc']:
+                result = result
+
+            if as_json is True:
+                json_ = {
+                    'name': name,
+                    'historical':
+                        [value.bond_as_json() for value in result]
+                }
+
+                final.append(json_)
+            elif as_json is False:
+                df = pd.DataFrame.from_records([value.bond_to_dict() for value in result])
+                df.set_index('Date', inplace=True)
+
+                final.append(df)
     if as_json is True:
         return json.dumps(final[0], sort_keys=False)
     elif as_json is False:
@@ -658,7 +648,7 @@ def get_bond_information(bond, as_json=False):
     req = requests.get(url, headers=head)
 
     if req.status_code != 200:
-        raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+        raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
     root_ = fromstring(req.text)
     path_ = root_.xpath("//div[contains(@class, 'overviewDataTable')]/div")
@@ -668,76 +658,72 @@ def get_bond_information(bond, as_json=False):
                                    '1-Year Change'])
     result.at[0, 'Bond Name'] = name
 
-    if path_:
-        for elements_ in path_:
-            element = elements_.xpath(".//span[@class='float_lang_base_1']")[0]
-            title_ = element.text_content()
-            if title_ == "Day's Range":
-                title_ = 'Todays Range'
-            if title_ in result.columns.tolist():
-                try:
-                    result.at[0, title_] = float(element.getnext().text_content().replace(',', ''))
-                    continue
-                except:
-                    pass
-                try:
-                    text = element.getnext().text_content().strip()
-                    result.at[0, title_] = datetime.strptime(text, "%d %b %Y").strftime("%d/%m/%Y")
-                    continue
-                except:
-                    pass
-                try:
-                    text = element.getnext().text_content().strip()
-                    occ = text.count('-')
-
-                    if occ == 1:
-                        reg = re.compile(r"([\-]{1}[ ]{1}[0-9\.]+)+")
-                        matches = reg.findall(text)
-                        if len(matches) > 0:
-                            result.at[0, title_] = float(matches[0].replace(' ', ''))
-                            continue
-                    elif occ == 2:
-                        reg = re.compile(r"([\-]{1}[ ]{1}[0-9\.]+)+")
-                        matches = reg.findall(text)
-                        if len(matches) > 0:
-                            res = matches[0].replace(' ', '')
-                            result.at[0, title_] = ' '.join([res, matches[1]])
-                            continue
-                    elif occ == 3:
-                        reg = re.compile(r"([\-]{1}[ ]{1}[0-9\.]+)+")
-                        matches = reg.findall(text)
-                        if len(matches) > 0:
-                            res = list()
-                            for match in matches:
-                                res.append(match.replace(' ', ''))
-                            result.at[0, title_] = ' - '.join(res)
-                            continue
-                except:
-                    pass
-                try:
-                    value = element.getnext().text_content().strip()
-                    if value.__contains__('K'):
-                        value = float(value.replace('K', '').replace(',', '')) * 1e3
-                    elif value.__contains__('M'):
-                        value = float(value.replace('M', '').replace(',', '')) * 1e6
-                    elif value.__contains__('B'):
-                        value = float(value.replace('B', '').replace(',', '')) * 1e9
-                    elif value.__contains__('T'):
-                        value = float(value.replace('T', '').replace(',', '')) * 1e12
-                    result.at[0, title_] = value
-                    continue
-                except:
-                    pass
-
-        result.replace({'N/A': None}, inplace=True)
-
-        if as_json is True:
-            json_ = result.iloc[0].to_dict()
-            return json_
-        elif as_json is False:
-            return result
-    else:
+    if not path_:
         raise RuntimeError("ERR#0004: data retrieval error while scraping.")
+    for elements_ in path_:
+        element = elements_.xpath(".//span[@class='float_lang_base_1']")[0]
+        title_ = element.text_content()
+        if title_ == "Day's Range":
+            title_ = 'Todays Range'
+        if title_ in result.columns.tolist():
+            try:
+                result.at[0, title_] = float(element.getnext().text_content().replace(',', ''))
+                continue
+            except:
+                pass
+            try:
+                text = element.getnext().text_content().strip()
+                result.at[0, title_] = datetime.strptime(text, "%d %b %Y").strftime("%d/%m/%Y")
+                continue
+            except:
+                pass
+            try:
+                text = element.getnext().text_content().strip()
+                occ = text.count('-')
+
+                if occ == 1:
+                    reg = re.compile(r"([\-]{1}[ ]{1}[0-9\.]+)+")
+                    matches = reg.findall(text)
+                    if len(matches) > 0:
+                        result.at[0, title_] = float(matches[0].replace(' ', ''))
+                        continue
+                elif occ == 2:
+                    reg = re.compile(r"([\-]{1}[ ]{1}[0-9\.]+)+")
+                    matches = reg.findall(text)
+                    if len(matches) > 0:
+                        res = matches[0].replace(' ', '')
+                        result.at[0, title_] = ' '.join([res, matches[1]])
+                        continue
+                elif occ == 3:
+                    reg = re.compile(r"([\-]{1}[ ]{1}[0-9\.]+)+")
+                    matches = reg.findall(text)
+                    if len(matches) > 0:
+                        res = [match.replace(' ', '') for match in matches]
+                        result.at[0, title_] = ' - '.join(res)
+                        continue
+            except:
+                pass
+            try:
+                value = element.getnext().text_content().strip()
+                if value.__contains__('K'):
+                    value = float(value.replace('K', '').replace(',', '')) * 1e3
+                elif value.__contains__('M'):
+                    value = float(value.replace('M', '').replace(',', '')) * 1e6
+                elif value.__contains__('B'):
+                    value = float(value.replace('B', '').replace(',', '')) * 1e9
+                elif value.__contains__('T'):
+                    value = float(value.replace('T', '').replace(',', '')) * 1e12
+                result.at[0, title_] = value
+                continue
+            except:
+                pass
+
+    result.replace({'N/A': None}, inplace=True)
+
+    if as_json is True:
+        return result.iloc[0].to_dict()
+    elif as_json is False:
+        return result
 
 
 def get_bonds_overview(country, as_json=False):
@@ -776,7 +762,7 @@ def get_bonds_overview(country, as_json=False):
     if country is None:
         raise ValueError("ERR#0039: country can not be None, it should be a str.")
 
-    if country is not None and not isinstance(country, str):
+    if not isinstance(country, str):
         raise ValueError("ERR#0025: specified country value not valid.")
 
     if not isinstance(as_json, bool):
@@ -817,51 +803,47 @@ def get_bonds_overview(country, as_json=False):
     req = requests.get(url, headers=head)
 
     if req.status_code != 200:
-        raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+        raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
     root_ = fromstring(req.text)
     table = root_.xpath(".//table[@id='cr1']/tbody/tr")
 
-    results = list()
+    results = []
 
-    if len(table) > 0:
-        for row in table:
-            id_ = row.get('id').replace('pair_', '')
-            country_check = row.xpath(".//td[@class='flag']/span")[0].get('title').lower()
-
-            name = row.xpath(".//td[contains(@class, 'elp')]/a")[0].text_content().strip()
-
-            pid = 'pid-' + id_
-
-            last = row.xpath(".//td[@class='" + pid + "-last']")[0].text_content()
-            last_close = row.xpath(".//td[@class='" + pid + "-last_close']")[0].text_content()
-            high = row.xpath(".//td[@class='" + pid + "-high']")[0].text_content()
-            low = row.xpath(".//td[@class='" + pid + "-low']")[0].text_content()
-
-            pc = row.xpath(".//td[contains(@class, '" + pid + "-pc')]")[0].text_content()
-            pcp = row.xpath(".//td[contains(@class, '" + pid + "-pcp')]")[0].text_content()
-
-            data = {
-                "country": country_check,
-                "name": name,
-                "last": float(last.replace(',', '')),
-                "last_close": float(last_close.replace(',', '')),
-                "high": float(high.replace(',', '')),
-                "low": float(low.replace(',', '')),
-                "change": pc,
-                "change_percentage": pcp
-            }
-
-            results.append(data)
-    else:
+    if len(table) <= 0:
         raise RuntimeError("ERR#0092: no data found while retrieving the overview from Investing.com")
 
+    for row in table:
+        id_ = row.get('id').replace('pair_', '')
+        country_check = row.xpath(".//td[@class='flag']/span")[0].get('title').lower()
+
+        name = row.xpath(".//td[contains(@class, 'elp')]/a")[0].text_content().strip()
+
+        pid = 'pid-' + id_
+
+        last = row.xpath(".//td[@class='" + pid + "-last']")[0].text_content()
+        last_close = row.xpath(".//td[@class='" + pid + "-last_close']")[0].text_content()
+        high = row.xpath(".//td[@class='" + pid + "-high']")[0].text_content()
+        low = row.xpath(".//td[@class='" + pid + "-low']")[0].text_content()
+
+        pc = row.xpath(".//td[contains(@class, '" + pid + "-pc')]")[0].text_content()
+        pcp = row.xpath(".//td[contains(@class, '" + pid + "-pcp')]")[0].text_content()
+
+        data = {
+            "country": country_check,
+            "name": name,
+            "last": float(last.replace(',', '')),
+            "last_close": float(last_close.replace(',', '')),
+            "high": float(high.replace(',', '')),
+            "low": float(low.replace(',', '')),
+            "change": pc,
+            "change_percentage": pcp
+        }
+
+        results.append(data)
     df = pd.DataFrame(results)
 
-    if as_json:
-        return json.loads(df.to_json(orient='records'))
-    else:
-        return df
+    return json.loads(df.to_json(orient='records')) if as_json else df
 
 
 def search_bonds(by, value):
@@ -924,7 +906,9 @@ def search_bonds(by, value):
     search_result = bonds.loc[bonds['matches'] == True].copy()
 
     if len(search_result) == 0:
-        raise RuntimeError('ERR#0043: no results were found for the introduced ' + str(by) + '.')
+        raise RuntimeError(
+            f'ERR#0043: no results were found for the introduced {str(by)}.'
+        )
 
     search_result.drop(columns=['matches'], inplace=True)
     search_result.reset_index(drop=True, inplace=True)

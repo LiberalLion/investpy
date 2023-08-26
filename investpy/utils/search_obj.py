@@ -81,9 +81,7 @@ class SearchObj(object):
             header = self.name + ' Historical Data'
             head, params = self._prepare_request(header)
 
-        data = self._data_retrieval(product=self.pair_type, head=head, params=params)
-        
-        return data
+        return self._data_retrieval(product=self.pair_type, head=head, params=params)
 
     def retrieve_historical_data(self, from_date, to_date):
         """Class method used to retrieve the historical data from the class instance of any financial product.
@@ -136,7 +134,7 @@ class SearchObj(object):
         if to_date.year - from_date.year > 19:
             intervals = self._calculate_intervals(from_date, to_date)
 
-            result = list()
+            result = []
 
             for interval in intervals['intervals']:
                 head, params = self._prepare_historical_request(header=header, from_date=interval['from'], to_date=interval['to'])
@@ -146,7 +144,7 @@ class SearchObj(object):
                 except:
                     continue
 
-            if len(result) > 0:
+            if result:
                 data = pd.concat(result)
             else:
                 raise RuntimeError("ERR#0004: data retrieval error while scraping.")
@@ -192,61 +190,60 @@ class SearchObj(object):
         req = requests.get(url, headers=head)
 
         if req.status_code != 200:
-            raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+            raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
         root_ = fromstring(req.text)
         path_ = root_.xpath("//div[contains(@class, 'overviewDataTable')]/div")
 
-        result = dict()
+        result = {}
 
-        if path_:
-            for elements_ in path_:
-                element = elements_.xpath(".//span[@class='float_lang_base_1']")[0]
-                title = element.text_content().strip()
-                if title == "Day's Range":
-                    title = 'Todays Range'
-                try:
-                    value = float(element.getnext().text_content().replace(',', ''))
-                    if isinstance(value, float):
-                        if value.is_integer() is True: value = int(value)
-                    result[title] = value if value != 'N/A' else None
-                    continue
-                except:
-                    pass
-                try:
-                    text = element.getnext().text_content().strip()
-                    text = datetime.strptime(text, "%m/%d/%Y").strftime("%d/%m/%Y")
-                    result[title] = text if text != 'N/A' else None
-                    continue
-                except:
-                    pass
-                try:
-                    text = element.getnext().text_content().strip()
-                    if text.__contains__('1 = '):
-                        text = text.replace('1 = ', '')
-                        result[title] = text if text != 'N/A' else None
-                        continue
-                except:
-                    pass
-                try:
-                    value = element.getnext().text_content().strip()
-                    if value.__contains__('K'):
-                        value = float(value.replace('K', '').replace(',', '')) * 1e3
-                    elif value.__contains__('M'):
-                        value = float(value.replace('M', '').replace(',', '')) * 1e6
-                    elif value.__contains__('B'):
-                        value = float(value.replace('B', '').replace(',', '')) * 1e9
-                    elif value.__contains__('T'):
-                        value = float(value.replace('T', '').replace(',', '')) * 1e12
-                    if isinstance(value, float):
-                        if value.is_integer() is True: value = int(value)
-                    result[title] = value if value != 'N/A' else None
-                    continue
-                except:
-                    pass
-        else:
+        if not path_:
             raise RuntimeError("ERR#0004: data retrieval error while scraping.")
 
+        for elements_ in path_:
+            element = elements_.xpath(".//span[@class='float_lang_base_1']")[0]
+            title = element.text_content().strip()
+            if title == "Day's Range":
+                title = 'Todays Range'
+            try:
+                value = float(element.getnext().text_content().replace(',', ''))
+                if isinstance(value, float):
+                    if value.is_integer(): value = int(value)
+                result[title] = value if value != 'N/A' else None
+                continue
+            except:
+                pass
+            try:
+                text = element.getnext().text_content().strip()
+                text = datetime.strptime(text, "%m/%d/%Y").strftime("%d/%m/%Y")
+                result[title] = text if text != 'N/A' else None
+                continue
+            except:
+                pass
+            try:
+                text = element.getnext().text_content().strip()
+                if text.__contains__('1 = '):
+                    text = text.replace('1 = ', '')
+                    result[title] = text if text != 'N/A' else None
+                    continue
+            except:
+                pass
+            try:
+                value = element.getnext().text_content().strip()
+                if value.__contains__('K'):
+                    value = float(value.replace('K', '').replace(',', '')) * 1e3
+                elif value.__contains__('M'):
+                    value = float(value.replace('M', '').replace(',', '')) * 1e6
+                elif value.__contains__('B'):
+                    value = float(value.replace('B', '').replace(',', '')) * 1e9
+                elif value.__contains__('T'):
+                    value = float(value.replace('T', '').replace(',', '')) * 1e12
+                if isinstance(value, float):
+                    if value.is_integer() is True: value = int(value)
+                result[title] = value if value != 'N/A' else None
+                continue
+            except:
+                pass
         self.info = result
         return self.info
 
@@ -301,7 +298,7 @@ class SearchObj(object):
 
         flag = True
 
-        while flag is True:
+        while flag:
             diff = to_date.year - from_date.year
 
             if diff > 19:
@@ -322,53 +319,48 @@ class SearchObj(object):
                 date_interval['intervals'].append(obj)
 
                 flag = False
-        
+
         return date_interval
     
     def _data_retrieval(self, product, head, params):
-        if product in ['stocks', 'etfs', 'indices', 'fxfutures', 'cryptos']:
-            has_volume = True
-        else:
-            has_volume = False
-
+        has_volume = product in ['stocks', 'etfs', 'indices', 'fxfutures', 'cryptos']
         url = "https://www.investing.com/instruments/HistoricalDataAjax"
 
         req = requests.post(url, headers=head, data=params)
 
         if req.status_code != 200:
-            raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+            raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
         root_ = fromstring(req.text)
         path_ = root_.xpath(".//table[@id='curr_table']/tbody/tr")
-        result = list()
+        result = []
 
-        if path_:
-            for elements_ in path_:
-                info = []
-
-                for nested_ in elements_.xpath(".//td"):
-                    val = nested_.get('data-real-value')
-                    if val is None and nested_.text_content() == 'No results found':
-                        raise IndexError("ERR#0033: information unavailable or not found.")
-                    info.append(val)
-
-                date_ = datetime.strptime(str(datetime.fromtimestamp(int(info[0]), tz=pytz.utc).date()), '%Y-%m-%d')
-                
-                close_ = float(info[1].replace(',', ''))
-                open_ = float(info[2].replace(',', ''))
-                high_ = float(info[3].replace(',', ''))
-                low_ = float(info[4].replace(',', ''))
-
-                volume_ = None
-                
-                if has_volume is True:
-                    volume_ = int(info[5])
-
-                result.insert(len(result),
-                              Data(date_, open_, high_, low_, close_, volume_, self.exchange, None))
-        else:
+        if not path_:
             raise RuntimeError("ERR#0004: data retrieval error while scraping.")
 
+        for elements_ in path_:
+            info = []
+
+            for nested_ in elements_.xpath(".//td"):
+                val = nested_.get('data-real-value')
+                if val is None and nested_.text_content() == 'No results found':
+                    raise IndexError("ERR#0033: information unavailable or not found.")
+                info.append(val)
+
+            date_ = datetime.strptime(str(datetime.fromtimestamp(int(info[0]), tz=pytz.utc).date()), '%Y-%m-%d')
+
+            close_ = float(info[1].replace(',', ''))
+            open_ = float(info[2].replace(',', ''))
+            high_ = float(info[3].replace(',', ''))
+            low_ = float(info[4].replace(',', ''))
+
+            volume_ = None
+
+            if has_volume:
+                volume_ = int(info[5])
+
+            result.insert(len(result),
+                          Data(date_, open_, high_, low_, close_, volume_, self.exchange, None))
         result = result[::-1]
 
         df = pd.DataFrame.from_records([value.unknown_to_dict() for value in result])

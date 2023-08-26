@@ -71,10 +71,10 @@ def search_quotes(text, products=None, countries=None, n_results=None):
             raise ValueError("ERR#0130: the introduced products filter must be a list of str in order to be valid.")
 
         condition = set(products).issubset(cst.PRODUCT_FILTERS.keys())
-        if condition is False:
+        if not condition:
             # TODO: instead of printing the possible filters, reference the docs
             raise ValueError('ERR#0095: products filtering parameter possible values are: \"' + ', '.join(cst.PRODUCT_FILTERS.keys()) + '\".')
-        
+
         products = [cst.PRODUCT_FILTERS[product] for product in products]
     else:
         products = list(cst.PRODUCT_FILTERS.values())
@@ -86,10 +86,10 @@ def search_quotes(text, products=None, countries=None, n_results=None):
             raise ValueError("ERR#0131: the introduced countries filter must be a list of str in order to be valid.")
 
         condition = set(countries).issubset(cst.COUNTRY_FILTERS.keys())
-        if condition is False:
+        if not condition:
             # TODO: instead of printing the possible filters, reference the docs
             raise ValueError('ERR#0129: countries filtering parameter possible values are: \"' + ', '.join(cst.COUNTRY_FILTERS.keys()) + '\".')
-        
+
         countries = [cst.COUNTRY_FILTERS[country] for country in countries]
     else:
         countries = list(cst.COUNTRY_FILTERS.values())
@@ -111,7 +111,7 @@ def search_quotes(text, products=None, countries=None, n_results=None):
 
     url = 'https://www.investing.com/search/service/SearchInnerPage'
 
-    search_results = list()
+    search_results = []
 
     total_results = None
 
@@ -119,7 +119,7 @@ def search_quotes(text, products=None, countries=None, n_results=None):
         req = requests.post(url, headers=head, data=params)
 
         if req.status_code != 200:
-            raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+            raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
         data = req.json()
 
@@ -137,9 +137,9 @@ def search_quotes(text, products=None, countries=None, n_results=None):
                 search_results.append(SearchObj(id_=quote['pairId'], name=quote['name'], symbol=quote['symbol'],
                                                 country=cst.FLAG_FILTERS[quote['flag']], tag=quote['link'],
                                                 pair_type=cst.PAIR_FILTERS[quote['pair_type']], exchange=quote['exchange']))
-        
+
         params['offset'] += 270
-        
+
         search_results = list(set(search_results))
 
         if len(search_results) >= n_results or len(search_results) >= total_results or params['offset'] >= total_results:

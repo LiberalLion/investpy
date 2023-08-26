@@ -56,19 +56,15 @@ def bonds_as_df(country=None):
     bonds.drop(columns=['tag', 'id'], inplace=True)
     bonds = bonds.where(pd.notnull(bonds), None)
 
-    if country is None:
-        bonds.reset_index(drop=True, inplace=True)
-        return bonds
-    else:
+    if country is not None:
         country = unidecode(country.strip().lower())
 
         if country not in bond_countries_as_list():
             raise ValueError("ERR#0034: country " + country + " not found, check if it is correct.")
 
         bonds = bonds[bonds['country'] == country]
-        bonds.reset_index(drop=True, inplace=True)
-        
-        return bonds
+    bonds.reset_index(drop=True, inplace=True)
+    return bonds
 
 
 def bonds_as_list(country=None):
@@ -118,13 +114,12 @@ def bonds_as_list(country=None):
 
     if country is None:
         return bonds['name'].tolist()
-    else:
-        country = unidecode(country.strip().lower())
+    country = unidecode(country.strip().lower())
 
-        if country not in bond_countries_as_list():
-            raise ValueError("ERR#0034: country " + country + " not found, check if it is correct.")
+    if country not in bond_countries_as_list():
+        raise ValueError("ERR#0034: country " + country + " not found, check if it is correct.")
 
-        return bonds[bonds['country'] == country]['name'].tolist()
+    return bonds[bonds['country'] == country]['name'].tolist()
 
 
 def bonds_as_dict(country=None, columns=None, as_json=False):
@@ -183,29 +178,28 @@ def bonds_as_dict(country=None, columns=None, as_json=False):
 
     if columns is None:
         columns = bonds.columns.tolist()
-    else:
-        if not isinstance(columns, list):
-            raise ValueError("ERR#0020: specified columns argument is not a list, it can just be list type.")
+    elif not isinstance(columns, list):
+        raise ValueError("ERR#0020: specified columns argument is not a list, it can just be list type.")
 
-    if not all(column in bonds.columns.tolist() for column in columns):
+    if any(column not in bonds.columns.tolist() for column in columns):
         raise ValueError("ERR#0063: specified columns does not exist, available columns are "
                          "<country, name, full_name>")
 
     if country is None:
-        if as_json:
-            return json.dumps(bonds[columns].to_dict(orient='records'))
-        else:
-            return bonds[columns].to_dict(orient='records')
+        return (
+            json.dumps(bonds[columns].to_dict(orient='records'))
+            if as_json
+            else bonds[columns].to_dict(orient='records')
+        )
+    country = unidecode(country.strip().lower())
+
+    if country not in bond_countries_as_list():
+        raise ValueError("ERR#0034: country " + country + " not found, check if it is correct.")
+
+    if as_json:
+        return json.dumps(bonds[bonds['country'] == country][columns].to_dict(orient='records'))
     else:
-        country = unidecode(country.strip().lower())
-
-        if country not in bond_countries_as_list():
-            raise ValueError("ERR#0034: country " + country + " not found, check if it is correct.")
-
-        if as_json:
-            return json.dumps(bonds[bonds['country'] == country][columns].to_dict(orient='records'))
-        else:
-            return bonds[bonds['country'] == country][columns].to_dict(orient='records')
+        return bonds[bonds['country'] == country][columns].to_dict(orient='records')
 
 
 def bond_countries_as_list():

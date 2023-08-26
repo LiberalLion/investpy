@@ -259,7 +259,7 @@ def get_commodity_recent_data(commodity, country=None, as_json=False, order='asc
 
     if country is None:
         found_commodities = commodities[commodities['name'].str.lower() == commodity]
-        
+
         if len(found_commodities) > 1:
             msg = "Note that the displayed commodity data can differ depending on the country. " \
                 "If you want to retrieve " + commodity + " data from either " + \
@@ -267,11 +267,11 @@ def get_commodity_recent_data(commodity, country=None, as_json=False, order='asc
             warnings.warn(msg, Warning)
 
         del found_commodities
-    else:
-        if unidecode(country.lower()) not in commodities['country'].unique().tolist():
-            raise RuntimeError("ERR#0034: country " + country.lower() + " not found, check if it is correct.")
-
+    elif unidecode(country.lower()) in commodities['country'].unique().tolist():
         commodities = commodities[commodities['country'] == unidecode(country.lower())]
+
+    else:
+        raise RuntimeError("ERR#0034: country " + country.lower() + " not found, check if it is correct.")
 
     full_name = commodities.loc[(commodities['name'].str.lower() == commodity).idxmax(), 'full_name']
     id_ = commodities.loc[(commodities['name'].str.lower() == commodity).idxmax(), 'id']
@@ -304,55 +304,50 @@ def get_commodity_recent_data(commodity, country=None, as_json=False, order='asc
     req = requests.post(url, headers=head, data=params)
 
     if req.status_code != 200:
-        raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+        raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
     root_ = fromstring(req.text)
     path_ = root_.xpath(".//table[@id='curr_table']/tbody/tr")
-    result = list()
+    result = []
 
-    if path_:
-        for elements_ in path_:
-            if elements_.xpath(".//td")[0].text_content() == 'No results found':
-                raise IndexError("ERR#0080: commodity information unavailable or not found.")
-
-            info = []
-
-            for nested_ in elements_.xpath(".//td"):
-                info.append(nested_.get('data-real-value'))
-
-            commodity_date = datetime.strptime(str(datetime.fromtimestamp(int(info[0]), tz=pytz.utc).date()), '%Y-%m-%d')
-            
-            commodity_close = float(info[1].replace(',', ''))
-            commodity_open = float(info[2].replace(',', ''))
-            commodity_high = float(info[3].replace(',', ''))
-            commodity_low = float(info[4].replace(',', ''))
-
-            commodity_volume = int(info[5])
-
-            result.insert(len(result),
-                          Data(commodity_date, commodity_open, commodity_high, commodity_low,
-                               commodity_close, commodity_volume, currency, None))
-
-        if order in ['ascending', 'asc']:
-            result = result[::-1]
-        elif order in ['descending', 'desc']:
-            result = result
-
-        if as_json is True:
-            json_ = {
-                'name': name,
-                'recent':
-                    [value.commodity_as_json() for value in result]
-            }
-
-            return json.dumps(json_, sort_keys=False)
-        elif as_json is False:
-            df = pd.DataFrame.from_records([value.commodity_to_dict() for value in result])
-            df.set_index('Date', inplace=True)
-
-            return df
-    else:
+    if not path_:
         raise RuntimeError("ERR#0004: data retrieval error while scraping.")
+    for elements_ in path_:
+        if elements_.xpath(".//td")[0].text_content() == 'No results found':
+            raise IndexError("ERR#0080: commodity information unavailable or not found.")
+
+        info = [nested_.get('data-real-value') for nested_ in elements_.xpath(".//td")]
+        commodity_date = datetime.strptime(str(datetime.fromtimestamp(int(info[0]), tz=pytz.utc).date()), '%Y-%m-%d')
+
+        commodity_close = float(info[1].replace(',', ''))
+        commodity_open = float(info[2].replace(',', ''))
+        commodity_high = float(info[3].replace(',', ''))
+        commodity_low = float(info[4].replace(',', ''))
+
+        commodity_volume = int(info[5])
+
+        result.insert(len(result),
+                      Data(commodity_date, commodity_open, commodity_high, commodity_low,
+                           commodity_close, commodity_volume, currency, None))
+
+    if order in ['ascending', 'asc']:
+        result = result[::-1]
+    elif order in ['descending', 'desc']:
+        result = result
+
+    if as_json is True:
+        json_ = {
+            'name': name,
+            'recent':
+                [value.commodity_as_json() for value in result]
+        }
+
+        return json.dumps(json_, sort_keys=False)
+    elif as_json is False:
+        df = pd.DataFrame.from_records([value.commodity_to_dict() for value in result])
+        df.set_index('Date', inplace=True)
+
+        return df
 
 
 def get_commodity_historical_data(commodity, from_date, to_date, country=None, as_json=False, order='ascending', interval='Daily'):

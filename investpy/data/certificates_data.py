@@ -57,19 +57,15 @@ def certificates_as_df(country=None):
     certificates.drop(columns=['tag', 'id'], inplace=True)
     certificates = certificates.where(pd.notnull(certificates), None)
 
-    if country is None:
-        certificates.reset_index(drop=True, inplace=True)
-        return certificates
-    else:
+    if country is not None:
         country = unidecode(country.strip().lower())
 
         if country not in certificate_countries_as_list():
             raise ValueError("ERR#0034: country " + country + " not found, check if it is correct.")
 
         certificates = certificates[certificates['country'] == country]
-        certificates.reset_index(drop=True, inplace=True)
-        
-        return certificates
+    certificates.reset_index(drop=True, inplace=True)
+    return certificates
 
 
 def certificates_as_list(country=None):
@@ -117,13 +113,12 @@ def certificates_as_list(country=None):
 
     if country is None:
         return certificates['name'].tolist()
-    else:
-        country = unidecode(country.strip().lower())
+    country = unidecode(country.strip().lower())
 
-        if country not in certificate_countries_as_list():
-            raise ValueError("ERR#0034: country " + country + " not found, check if it is correct.")
+    if country not in certificate_countries_as_list():
+        raise ValueError("ERR#0034: country " + country + " not found, check if it is correct.")
 
-        return certificates[certificates['country'] == country]['name'].tolist()
+    return certificates[certificates['country'] == country]['name'].tolist()
 
 
 def certificates_as_dict(country=None, columns=None, as_json=False):
@@ -167,7 +162,7 @@ def certificates_as_dict(country=None, columns=None, as_json=False):
 
     if country is not None and not isinstance(country, str):
         raise ValueError("ERR#0025: specified country value not valid.")
-    
+
     if not isinstance(as_json, bool):
         raise ValueError("ERR#0002: as_json argument can just be True or False, bool type.")
 
@@ -186,29 +181,28 @@ def certificates_as_dict(country=None, columns=None, as_json=False):
 
     if columns is None:
         columns = certificates.columns.tolist()
-    else:
-        if not isinstance(columns, list):
-            raise ValueError("ERR#0020: specified columns argument is not a list, it can just be list type.")
+    elif not isinstance(columns, list):
+        raise ValueError("ERR#0020: specified columns argument is not a list, it can just be list type.")
 
-    if not all(column in certificates.columns.tolist() for column in columns):
+    if any(column not in certificates.columns.tolist() for column in columns):
         raise ValueError("ERR#0021: specified columns does not exist, available columns are "
                          "<country, name, full_name, symbol, issuer, isin, asset_class, underlying>")
 
     if country is None:
-        if as_json:
-            return json.dumps(certificates[columns].to_dict(orient='records'))
-        else:
-            return certificates[columns].to_dict(orient='records')
-    else:
-        country = unidecode(country.strip().lower())
+        return (
+            json.dumps(certificates[columns].to_dict(orient='records'))
+            if as_json
+            else certificates[columns].to_dict(orient='records')
+        )
+    country = unidecode(country.strip().lower())
 
-        if country not in certificate_countries_as_list():
-            raise ValueError("ERR#0034: country " + country + " not found, check if it is correct.")
-        
-        if as_json:
-            return json.dumps(certificates[certificates['country'] == country][columns].to_dict(orient='records'))
-        else:
-            return certificates[certificates['country'] == country][columns].to_dict(orient='records')
+    if country not in certificate_countries_as_list():
+        raise ValueError("ERR#0034: country " + country + " not found, check if it is correct.")
+
+    if as_json:
+        return json.dumps(certificates[certificates['country'] == country][columns].to_dict(orient='records'))
+    else:
+        return certificates[certificates['country'] == country][columns].to_dict(orient='records')
 
 
 def certificate_countries_as_list():

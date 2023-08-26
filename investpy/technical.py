@@ -105,19 +105,15 @@ def technical_indicators(name, country, product_type, interval='daily'):
         if country is not None:
             country = unidecode(country.lower().strip())
 
-            if country not in data['country'].tolist():
+            if country in data['country'].tolist():
+                data = data[data['country'] == country]
+            else:
                 raise ValueError("ERR#0124: introduced country does not exist or is not available.")
 
-            data = data[data['country'] == country]
-        else:
-            if product_type != 'commodity':
-                raise ValueError("ERR#0123: country parameter is required with the introduced product_type.")
+        elif product_type != 'commodity':
+            raise ValueError("ERR#0123: country parameter is required with the introduced product_type.")
 
-    if product_type == 'stock':
-        check = 'symbol'
-    else:
-        check = 'name'
-
+    check = 'symbol' if product_type == 'stock' else 'name'
     name = unidecode(name.lower().strip())
 
     if name not in [unidecode(value.lower()) for value in data[check].tolist()]:
@@ -144,12 +140,12 @@ def technical_indicators(name, country, product_type, interval='daily'):
     req = requests.post(url, headers=headers, data=data_values)
 
     if req.status_code != 200:
-        raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+        raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
     root = fromstring(req.text)
     table = root.xpath(".//table[contains(@class, 'technicalIndicatorsTbl')]/tbody/tr")
 
-    tech_indicators = list()
+    tech_indicators = []
 
     for row in table:
         for value in row.xpath("td"):
@@ -157,7 +153,7 @@ def technical_indicators(name, country, product_type, interval='daily'):
                 tech_ind = value.text_content().strip()
                 tech_val = float(value.getnext().text_content().strip())
                 tech_sig = value.getnext().getnext().text_content().strip().lower()
-                
+
                 tech_indicators.append({
                     'technical_indicator': tech_ind,
                     'value': tech_val,
@@ -255,19 +251,15 @@ def moving_averages(name, country, product_type, interval='daily'):
         if country is not None:
             country = unidecode(country.lower().strip())
 
-            if country not in data['country'].tolist():
+            if country in data['country'].tolist():
+                data = data[data['country'] == country]
+            else:
                 raise ValueError("ERR#0124: introduced country does not exist or is not available.")
 
-            data = data[data['country'] == country]
-        else:
-            if product_type != 'commodity':
-                raise ValueError("ERR#0123: country parameter is required with the introduced product_type.")
+        elif product_type != 'commodity':
+            raise ValueError("ERR#0123: country parameter is required with the introduced product_type.")
 
-    if product_type == 'stock':
-        check = 'symbol'
-    else:
-        check = 'name'
-
+    check = 'symbol' if product_type == 'stock' else 'name'
     name = unidecode(name.lower().strip())
 
     if name not in [unidecode(value.lower()) for value in data[check].tolist()]:
@@ -294,12 +286,12 @@ def moving_averages(name, country, product_type, interval='daily'):
     req = requests.post(url, headers=headers, data=data_values)
 
     if req.status_code != 200:
-        raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+        raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
     root = fromstring(req.text)
     table = root.xpath(".//table[contains(@class, 'movingAvgsTbl')]/tbody/tr")
 
-    moving_avgs = list()
+    moving_avgs = []
 
     for row in table:
         for value in row.xpath("td"):
@@ -409,19 +401,15 @@ def pivot_points(name, country, product_type, interval='daily'):
         if country is not None:
             country = unidecode(country.lower().strip())
 
-            if country not in data['country'].tolist():
+            if country in data['country'].tolist():
+                data = data[data['country'] == country]
+            else:
                 raise ValueError("ERR#0124: introduced country does not exist or is not available.")
 
-            data = data[data['country'] == country]
-        else:
-            if product_type != 'commodity':
-                raise ValueError("ERR#0123: country parameter is required with the introduced product_type.")
+        elif product_type != 'commodity':
+            raise ValueError("ERR#0123: country parameter is required with the introduced product_type.")
 
-    if product_type == 'stock':
-        check = 'symbol'
-    else:
-        check = 'name'
-
+    check = 'symbol' if product_type == 'stock' else 'name'
     name = unidecode(name.lower().strip())
 
     if name not in [unidecode(value.lower()) for value in data[check].tolist()]:
@@ -448,34 +436,33 @@ def pivot_points(name, country, product_type, interval='daily'):
     req = requests.post(url, headers=headers, data=data_values)
 
     if req.status_code != 200:
-        raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+        raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
     root = fromstring(req.text)
     header = root.xpath(".//table[contains(@class, 'crossRatesTbl')]/thead/tr/th")
 
-    values = dict()
-
-    for index, column in enumerate(header):
-        values.update({index: column.text_content().strip().lower().replace(' ', '_')})
-
+    values = {
+        index: column.text_content().strip().lower().replace(' ', '_')
+        for index, column in enumerate(header)
+    }
     table = root.xpath(".//table[contains(@class, 'crossRatesTbl')]/tbody/tr")
 
-    pivot_pts = list()
+    pivot_pts = []
 
     for row in table:
-        pivot_pt = dict()
+        pivot_pt = {}
         elements = row.xpath("td")
 
         for key, value in values.items():
             if value != 'name':
                 val = elements[key].text_content().strip()
                 try:
-                    pivot_pt.update({value: float(val)})
+                    pivot_pt[value] = float(val)
                 except:
-                    pivot_pt.update({value: None})
+                    pivot_pt[value] = None
             else:
-                pivot_pt.update({value: elements[key].text_content().strip()})
-        
+                pivot_pt[value] = elements[key].text_content().strip()
+
         pivot_pts.append(pivot_pt)
 
     return pd.DataFrame(pivot_pts)

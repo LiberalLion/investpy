@@ -278,7 +278,9 @@ def get_currency_cross_recent_data(currency_cross, as_json=False, order='ascendi
     currency_cross = currency_cross.lower()
 
     if unidecode(currency_cross) not in [unidecode(value.lower()) for value in currency_crosses['name'].tolist()]:
-        raise RuntimeError("ERR#0054: the introduced currency_cross " + str(currency_cross) + " does not exists.")
+        raise RuntimeError(
+            f"ERR#0054: the introduced currency_cross {str(currency_cross)} does not exists."
+        )
 
     id_ = currency_crosses.loc[(currency_crosses['name'].str.lower() == currency_cross).idxmax(), 'id']
     name = currency_crosses.loc[(currency_crosses['name'].str.lower() == currency_cross).idxmax(), 'name']
@@ -309,53 +311,48 @@ def get_currency_cross_recent_data(currency_cross, as_json=False, order='ascendi
     req = requests.post(url, headers=head, data=params)
 
     if req.status_code != 200:
-        raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+        raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
     root_ = fromstring(req.text)
     path_ = root_.xpath(".//table[@id='curr_table']/tbody/tr")
-    result = list()
+    result = []
 
-    if path_:
-        for elements_ in path_:
-            if elements_.xpath(".//td")[0].text_content() == 'No results found':
-                raise IndexError("ERR#0055: currency_cross information unavailable or not found.")
-
-            info = []
-        
-            for nested_ in elements_.xpath(".//td"):
-                info.append(nested_.get('data-real-value'))
-
-            currency_cross_date = datetime.strptime(str(datetime.fromtimestamp(int(info[0]), tz=pytz.utc).date()), '%Y-%m-%d')
-            
-            currency_cross_close = float(info[1].replace(',', ''))
-            currency_cross_open = float(info[2].replace(',', ''))
-            currency_cross_high = float(info[3].replace(',', ''))
-            currency_cross_low = float(info[4].replace(',', ''))
-
-            result.insert(len(result),
-                          Data(currency_cross_date, currency_cross_open, currency_cross_high, currency_cross_low,
-                               currency_cross_close, None, currency, None))
-
-        if order in ['ascending', 'asc']:
-            result = result[::-1]
-        elif order in ['descending', 'desc']:
-            result = result
-
-        if as_json is True:
-            json_ = {
-                'name': name,
-                'recent': 
-                    [value.currency_cross_as_json() for value in result]
-            }
-
-            return json.dumps(json_, sort_keys=False)
-        elif as_json is False:
-            df = pd.DataFrame.from_records([value.currency_cross_to_dict() for value in result])
-            df.set_index('Date', inplace=True)
-
-            return df
-    else:
+    if not path_:
         raise RuntimeError("ERR#0004: data retrieval error while scraping.")
+    for elements_ in path_:
+        if elements_.xpath(".//td")[0].text_content() == 'No results found':
+            raise IndexError("ERR#0055: currency_cross information unavailable or not found.")
+
+        info = [nested_.get('data-real-value') for nested_ in elements_.xpath(".//td")]
+        currency_cross_date = datetime.strptime(str(datetime.fromtimestamp(int(info[0]), tz=pytz.utc).date()), '%Y-%m-%d')
+
+        currency_cross_close = float(info[1].replace(',', ''))
+        currency_cross_open = float(info[2].replace(',', ''))
+        currency_cross_high = float(info[3].replace(',', ''))
+        currency_cross_low = float(info[4].replace(',', ''))
+
+        result.insert(len(result),
+                      Data(currency_cross_date, currency_cross_open, currency_cross_high, currency_cross_low,
+                           currency_cross_close, None, currency, None))
+
+    if order in ['ascending', 'asc']:
+        result = result[::-1]
+    elif order in ['descending', 'desc']:
+        result = result
+
+    if as_json is True:
+        json_ = {
+            'name': name,
+            'recent': 
+                [value.currency_cross_as_json() for value in result]
+        }
+
+        return json.dumps(json_, sort_keys=False)
+    elif as_json is False:
+        df = pd.DataFrame.from_records([value.currency_cross_to_dict() for value in result])
+        df.set_index('Date', inplace=True)
+
+        return df
 
 
 def get_currency_cross_historical_data(currency_cross, from_date, to_date, as_json=False, order='ascending', interval='Daily'):
@@ -466,7 +463,7 @@ def get_currency_cross_historical_data(currency_cross, from_date, to_date, as_js
 
     flag = True
 
-    while flag is True:
+    while flag:
         diff = end_date.year - start_date.year
 
         if diff > 19:
@@ -507,15 +504,19 @@ def get_currency_cross_historical_data(currency_cross, from_date, to_date, as_js
     currency_cross = currency_cross.lower()
 
     if unidecode(currency_cross) not in [unidecode(value.lower()) for value in currency_crosses['name'].tolist()]:
-        raise RuntimeError("ERR#0054: the introduced currency_cross " + str(currency_cross) + " does not exists.")
+        raise RuntimeError(
+            f"ERR#0054: the introduced currency_cross {str(currency_cross)} does not exists."
+        )
 
     id_ = currency_crosses.loc[(currency_crosses['name'].str.lower() == currency_cross).idxmax(), 'id']
     name = currency_crosses.loc[(currency_crosses['name'].str.lower() == currency_cross).idxmax(), 'name']
     currency = currency_crosses.loc[(currency_crosses['name'].str.lower() == currency_cross).idxmax(), 'second']
 
-    final = list()
+    final = []
 
     header = name + ' Historical Data'
+
+    url = "https://www.investing.com/instruments/HistoricalDataAjax"
 
     for index in range(len(date_interval['intervals'])):
         interval_counter += 1
@@ -540,70 +541,63 @@ def get_currency_cross_historical_data(currency_cross, from_date, to_date, as_js
             "Connection": "keep-alive",
         }
 
-        url = "https://www.investing.com/instruments/HistoricalDataAjax"
-
         req = requests.post(url, headers=head, data=params)
 
         if req.status_code != 200:
-            raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+            raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
         if not req.text:
             continue
 
         root_ = fromstring(req.text)
         path_ = root_.xpath(".//table[@id='curr_table']/tbody/tr")
-        
-        result = list()
 
-        if path_:
-            for elements_ in path_:
-                info = []
-        
-                for nested_ in elements_.xpath(".//td"):
-                    info.append(nested_.get('data-real-value'))
+        result = []
 
-                if elements_.xpath(".//td")[0].text_content() == 'No results found':
-                    if interval_counter < interval_limit:
-                        data_flag = False
-                    else:
-                        raise IndexError("ERR#0055: currency_cross information unavailable or not found.")
-                else:
-                    data_flag = True
-
-                if data_flag is True:
-                    currency_cross_date = datetime.strptime(str(datetime.fromtimestamp(int(info[0]), tz=pytz.utc).date()), '%Y-%m-%d')
-                    
-                    currency_cross_close = float(info[1].replace(',', ''))
-                    currency_cross_open = float(info[2].replace(',', ''))
-                    currency_cross_high = float(info[3].replace(',', ''))
-                    currency_cross_low = float(info[4].replace(',', ''))
-
-                    result.insert(len(result),
-                                  Data(currency_cross_date, currency_cross_open, currency_cross_high, currency_cross_low,
-                                       currency_cross_close, None, currency, None))
-
-            if data_flag is True:
-                if order in ['ascending', 'asc']:
-                    result = result[::-1]
-                elif order in ['descending', 'desc']:
-                    result = result
-
-                if as_json is True:
-                    json_ = {
-                        'name': name,
-                        'historical':
-                            [value.currency_cross_as_json() for value in result]
-                    }
-
-                    final.append(json_)
-                elif as_json is False:
-                    df = pd.DataFrame.from_records([value.currency_cross_to_dict() for value in result])
-                    df.set_index('Date', inplace=True)
-
-                    final.append(df)
-        else:
+        if not path_:
             raise RuntimeError("ERR#0004: data retrieval error while scraping.")
 
+        for elements_ in path_:
+            info = [nested_.get('data-real-value') for nested_ in elements_.xpath(".//td")]
+            if elements_.xpath(".//td")[0].text_content() == 'No results found':
+                if interval_counter < interval_limit:
+                    data_flag = False
+                else:
+                    raise IndexError("ERR#0055: currency_cross information unavailable or not found.")
+            else:
+                data_flag = True
+
+            if data_flag is True:
+                currency_cross_date = datetime.strptime(str(datetime.fromtimestamp(int(info[0]), tz=pytz.utc).date()), '%Y-%m-%d')
+
+                currency_cross_close = float(info[1].replace(',', ''))
+                currency_cross_open = float(info[2].replace(',', ''))
+                currency_cross_high = float(info[3].replace(',', ''))
+                currency_cross_low = float(info[4].replace(',', ''))
+
+                result.insert(len(result),
+                              Data(currency_cross_date, currency_cross_open, currency_cross_high, currency_cross_low,
+                                   currency_cross_close, None, currency, None))
+
+        if data_flag is True:
+            if order in ['ascending', 'asc']:
+                result = result[::-1]
+            elif order in ['descending', 'desc']:
+                result = result
+
+            if as_json is True:
+                json_ = {
+                    'name': name,
+                    'historical':
+                        [value.currency_cross_as_json() for value in result]
+                }
+
+                final.append(json_)
+            elif as_json is False:
+                df = pd.DataFrame.from_records([value.currency_cross_to_dict() for value in result])
+                df.set_index('Date', inplace=True)
+
+                final.append(df)
     if as_json is True:
         return json.dumps(final[0], sort_keys=False)
     elif as_json is False:
@@ -672,7 +666,9 @@ def get_currency_cross_information(currency_cross, as_json=False):
     currency_cross = currency_cross.lower()
 
     if unidecode(currency_cross) not in [unidecode(value.lower()) for value in crosses['name'].tolist()]:
-        raise RuntimeError("ERR#0054: the introduced currency_cross " + str(currency_cross) + " does not exists.")
+        raise RuntimeError(
+            f"ERR#0054: the introduced currency_cross {str(currency_cross)} does not exists."
+        )
 
     name = crosses.loc[(crosses['name'].str.lower() == currency_cross).idxmax(), 'name']
     tag = crosses.loc[(crosses['name'].str.lower() == currency_cross).idxmax(), 'tag']
@@ -690,7 +686,7 @@ def get_currency_cross_information(currency_cross, as_json=False):
     req = requests.get(url, headers=head)
 
     if req.status_code != 200:
-        raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+        raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
     root_ = fromstring(req.text)
     path_ = root_.xpath("//div[contains(@class, 'overviewDataTable')]/div")
@@ -699,48 +695,46 @@ def get_currency_cross_information(currency_cross, as_json=False):
                                    'Open', 'Ask', '52 wk Range', '1-Year Change'])
     result.at[0, 'Currency Cross'] = name
 
-    if path_:
-        for elements_ in path_:
-            element = elements_.xpath(".//span[@class='float_lang_base_1']")[0]
-            title_ = element.text_content()
-            if title_ == "Day's Range":
-                title_ = 'Todays Range'
-            if title_ in result.columns.tolist():
-                try:
-                    result.at[0, title_] = float(element.getnext().text_content().replace(',', ''))
-                    continue
-                except:
-                    pass
-                try:
-                    text = element.getnext().text_content().strip()
-                    result.at[0, title_] = datetime.strptime(text, "%b %d, %Y").strftime("%d/%m/%Y")
-                    continue
-                except:
-                    pass
-                try:
-                    value = element.getnext().text_content().strip()
-                    if value.__contains__('K'):
-                        value = float(value.replace('K', '').replace(',', '')) * 1e3
-                    elif value.__contains__('M'):
-                        value = float(value.replace('M', '').replace(',', '')) * 1e6
-                    elif value.__contains__('B'):
-                        value = float(value.replace('B', '').replace(',', '')) * 1e9
-                    elif value.__contains__('T'):
-                        value = float(value.replace('T', '').replace(',', '')) * 1e12
-                    result.at[0, title_] = value
-                    continue
-                except:
-                    pass
-
-        result.replace({'N/A': None}, inplace=True)
-
-        if as_json is True:
-            json_ = result.iloc[0].to_dict()
-            return json_
-        elif as_json is False:
-            return result
-    else:
+    if not path_:
         raise RuntimeError("ERR#0004: data retrieval error while scraping.")
+    for elements_ in path_:
+        element = elements_.xpath(".//span[@class='float_lang_base_1']")[0]
+        title_ = element.text_content()
+        if title_ == "Day's Range":
+            title_ = 'Todays Range'
+        if title_ in result.columns.tolist():
+            try:
+                result.at[0, title_] = float(element.getnext().text_content().replace(',', ''))
+                continue
+            except:
+                pass
+            try:
+                text = element.getnext().text_content().strip()
+                result.at[0, title_] = datetime.strptime(text, "%b %d, %Y").strftime("%d/%m/%Y")
+                continue
+            except:
+                pass
+            try:
+                value = element.getnext().text_content().strip()
+                if value.__contains__('K'):
+                    value = float(value.replace('K', '').replace(',', '')) * 1e3
+                elif value.__contains__('M'):
+                    value = float(value.replace('M', '').replace(',', '')) * 1e6
+                elif value.__contains__('B'):
+                    value = float(value.replace('B', '').replace(',', '')) * 1e9
+                elif value.__contains__('T'):
+                    value = float(value.replace('T', '').replace(',', '')) * 1e12
+                result.at[0, title_] = value
+                continue
+            except:
+                pass
+
+    result.replace({'N/A': None}, inplace=True)
+
+    if as_json is True:
+        return result.iloc[0].to_dict()
+    elif as_json is False:
+        return result
 
 
 def get_currency_crosses_overview(currency, as_json=False, n_results=100):
@@ -791,7 +785,7 @@ def get_currency_crosses_overview(currency, as_json=False, n_results=100):
     if not isinstance(n_results, int):
         raise ValueError("ERR#0089: n_results argument should be an integer between 1 and 1000.")
 
-    if 1 > n_results or n_results > 1000:
+    if n_results < 1 or n_results > 1000:
         raise ValueError("ERR#0089: n_results argument should be an integer between 1 and 1000.")
 
     currency = unidecode(currency.lower())
@@ -819,60 +813,56 @@ def get_currency_crosses_overview(currency, as_json=False, n_results=100):
     req = requests.get(url, headers=head, params=params)
 
     if req.status_code != 200:
-        raise ConnectionError("ERR#0015: error " + str(req.status_code) + ", try again later.")
+        raise ConnectionError(f"ERR#0015: error {req.status_code}, try again later.")
 
     root_ = fromstring(req.json()['HTML'])
     table = root_.xpath(".//table[@id='cr1']/tbody/tr")
 
-    results = list()
+    results = []
 
-    if len(table) > 0:
-        for row in table[:n_results]:
-            id_ = row.get('id').replace('pair_', '')
-
-            symbol = row.xpath(".//td[contains(@class, 'elp')]/a")[0].text_content().strip()
-            name = row.xpath(".//td[contains(@class, 'elp')]/a")[0].get('title')
-
-            if symbol.__contains__(currency + '='):
-                old_symbol = symbol
-                symbol = symbol.replace('=', '').replace(currency, '/' + currency)
-                name = name.replace(old_symbol, symbol)
-            elif symbol.__contains__('='):
-                old_symbol = symbol
-                symbol = symbol.replace('=', '').replace(currency, currency + '/')
-                name = name.replace(old_symbol, symbol)
-
-            pid = 'pid-' + id_
-
-            bid = row.xpath(".//td[@class='" + pid + "-bid']")[0].text_content()
-            ask = row.xpath(".//td[@class='" + pid + "-ask']")[0].text_content()
-            high = row.xpath(".//td[@class='" + pid + "-high']")[0].text_content()
-            low = row.xpath(".//td[@class='" + pid + "-low']")[0].text_content()
-
-            pc = row.xpath(".//td[contains(@class, '" + pid + "-pc')]")[0].text_content()
-            pcp = row.xpath(".//td[contains(@class, '" + pid + "-pcp')]")[0].text_content()
-
-            data = {
-                "symbol": symbol,
-                "name": name,
-                "bid": float(bid.replace(',', '')),
-                "ask": float(ask.replace(',', '')),
-                "high": float(high.replace(',', '')),
-                "low": float(low.replace(',', '')),
-                "change": pc,
-                "change_percentage": pcp
-            }
-
-            results.append(data)
-    else:
+    if len(table) <= 0:
         raise RuntimeError("ERR#0092: no data found while retrieving the overview from Investing.com")
 
+    for row in table[:n_results]:
+        id_ = row.get('id').replace('pair_', '')
+
+        symbol = row.xpath(".//td[contains(@class, 'elp')]/a")[0].text_content().strip()
+        name = row.xpath(".//td[contains(@class, 'elp')]/a")[0].get('title')
+
+        if symbol.__contains__(currency + '='):
+            old_symbol = symbol
+            symbol = symbol.replace('=', '').replace(currency, '/' + currency)
+            name = name.replace(old_symbol, symbol)
+        elif symbol.__contains__('='):
+            old_symbol = symbol
+            symbol = symbol.replace('=', '').replace(currency, currency + '/')
+            name = name.replace(old_symbol, symbol)
+
+        pid = 'pid-' + id_
+
+        bid = row.xpath(".//td[@class='" + pid + "-bid']")[0].text_content()
+        ask = row.xpath(".//td[@class='" + pid + "-ask']")[0].text_content()
+        high = row.xpath(".//td[@class='" + pid + "-high']")[0].text_content()
+        low = row.xpath(".//td[@class='" + pid + "-low']")[0].text_content()
+
+        pc = row.xpath(".//td[contains(@class, '" + pid + "-pc')]")[0].text_content()
+        pcp = row.xpath(".//td[contains(@class, '" + pid + "-pcp')]")[0].text_content()
+
+        data = {
+            "symbol": symbol,
+            "name": name,
+            "bid": float(bid.replace(',', '')),
+            "ask": float(ask.replace(',', '')),
+            "high": float(high.replace(',', '')),
+            "low": float(low.replace(',', '')),
+            "change": pc,
+            "change_percentage": pcp
+        }
+
+        results.append(data)
     df = pd.DataFrame(results)
 
-    if as_json:
-        return json.loads(df.to_json(orient='records'))
-    else:
-        return df
+    return json.loads(df.to_json(orient='records')) if as_json else df
 
 
 def search_currency_crosses(by, value):
